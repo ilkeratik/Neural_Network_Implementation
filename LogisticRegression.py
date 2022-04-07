@@ -1,6 +1,8 @@
 import numpy as np
 import copy
-from activation.activation import Activation
+from activation.activation import sigmoid
+from loss.loss import logistic_loss
+
 class LogisticRegression():
 
     def __init__(self):
@@ -27,8 +29,8 @@ class LogisticRegression():
     def propagate(self, w, b, X, Y):
 
         m = X.shape[1]
-        A = Activation.sigmoid(np.dot(w.T,X)+b)
-        cost = (-1/m)*np.sum((Y*np.log(A)+(1-Y)*np.log(1-A)))
+        A = sigmoid(np.dot(w.T,X)+b)
+        cost = (-1/m)*np.sum(logistic_loss(A, Y))
         
         dw = (1/m)*np.dot(X,(A-Y).T)
         db = (1/m)*np.sum(A-Y)
@@ -57,10 +59,6 @@ class LogisticRegression():
         grads -- dictionary containing the gradients of the weights and bias with respect to the cost function
         costs -- list of all the costs computed during the optimization, this will be used to plot the learning curve.
         
-        Tips:
-        You basically need to write down two steps and iterate through them:
-            1) Calculate the cost and the gradient for the current parameters. Use propagate().
-            2) Update the parameters using gradient descent rule for w and b.
         """
         
         w = copy.deepcopy(w)
@@ -116,7 +114,7 @@ class LogisticRegression():
         Y_prediction = np.zeros((1, m))
         w = w.reshape(X.shape[0], 1)
 
-        A = Activation.sigmoid(np.dot(w.T,X)+b)
+        A = sigmoid(np.dot(w.T,X)+b)
         
         Y_prediction = np.array([1 if i> 0.5 else 0 for i in A[0]]).reshape(1,-1)
 
@@ -125,7 +123,7 @@ class LogisticRegression():
     def print_metrics(self, y_pred, y_actual):
         print("model accuracy: {} %".format(100 - np.mean(np.abs(y_pred - y_actual)) * 100))
     
-    def visualize_loss(self, costs):
+    def visualize_costs(self, costs):
         import matplotlib.pyplot as plt
         x = [x*100 for x in range(1,len(costs)+1)]
         plt.plot(x,costs)
@@ -161,6 +159,7 @@ class LogisticRegression():
         test_set_x = test_set_x_flatten / 255.
 
         return train_set_x , test_set_x
+
 if __name__ == '__main__':
     lr = LogisticRegression()
     
@@ -171,7 +170,7 @@ if __name__ == '__main__':
     
     y_pred = lr.predict(test_set_x)
     lr.print_metrics(y_pred, test_set_y)
-    lr.visualize_loss(costs)
+    lr.visualize_costs(costs)
 
 
 
