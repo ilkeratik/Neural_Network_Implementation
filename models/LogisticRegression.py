@@ -1,9 +1,9 @@
-# import sys
-# import os
-# current = os.path.dirname(os.path.realpath(__file__))
-# print(current)
-# parent = os.path.dirname(current)
-# sys.path.append(parent)
+import sys
+import os
+current = os.path.dirname(os.path.realpath(__file__))
+print(current)
+parent = os.path.dirname(current)
+sys.path.append(parent)
 
 import numpy as np
 import copy

@@ -1,9 +1,22 @@
+import sys
+import os
+current = os.path.dirname(os.path.realpath(__file__))
+print(current)
+parent = os.path.dirname(current)
+sys.path.append(parent)
+
+
 import numpy as np
 from activation.activation import sigmoid
 from loss.cost import cross_entropy_cost
 import matplotlib.pyplot as plt
+import pandas as pd
 
-class OneHiddenLayerClassification:
+from sklearn.preprocessing import RobustScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, accuracy_score, recall_score, precision_score, f1_score
+import seaborn as sns
+class OneHiddenLayerCls:
 
     def __init_(self):
         self.parameters = {}
@@ -68,8 +81,6 @@ class OneHiddenLayerClassification:
     
     def backward_propagation(self, cache, X, Y):
         """
-        Implement the backward propagation using the instructions above.
-        
         Arguments:
         parameters -- python dictionary containing our parameters 
         cache -- a dictionary containing "Z1", "A1", "Z2" and "A2".
@@ -136,7 +147,7 @@ class OneHiddenLayerClassification:
                     "W2": W2,
                     "b2": b2}
     
-    def train_nn_model(self, X, Y, n_hidden, num_iterations=5000, learning_rate=0.01, print_cost=False):
+    def train_nn_model(self, X, Y, n_hidden, num_iterations=5000, learning_rate=0.01, batch_size=False, print_cost=False):
         """
         Arguments:
         X -- Input vector
@@ -146,18 +157,31 @@ class OneHiddenLayerClassification:
         n_x = X.shape[0]
         n_y = Y.shape[0]
 
+        m_x = X.shape[1]
         self.parameters = self.initialize_parameters(n_x, n_hidden, n_y)
         costs = []
         for i in range(num_iterations):
-            A2, cache = self.forward_propagation(X)
+            Y_batch = None
+            if batch_size: # if batch_size is set mini batches will be used to optimize
+                batch = np.random.choice(range(m_x), batch_size)
+                X_batch = X.iloc[:,batch]
+                Y_batch = Y[0,batch].reshape(1,-1)
+                A2, cache = self.forward_propagation(X_batch)
+                grads = self.backward_propagation(cache, X_batch, Y_batch)
             
-            grads = self.backward_propagation(cache, X, Y)
+            else:
+                A2, cache = self.forward_propagation(X)
+                grads = self.backward_propagation(cache, X, Y)
 
             # update parameters
             self.gradient_descent_step(grads,learning_rate=learning_rate)
 
-            if print_cost and i % 1000 == 0:
-                cost = cross_entropy_cost(A2, Y)
+            if print_cost and i % 10 == 0:
+                if batch_size:
+                    cost = cross_entropy_cost(A2, Y_batch)
+                else:
+                    cost = cross_entropy_cost(A2, Y)
+
                 costs.append(cost)
                 print("Cost after iteration %i: %f" %(i, cost))
         self.costs = costs
@@ -165,7 +189,7 @@ class OneHiddenLayerClassification:
     
     def predict(self, X):
         A2, cache = self.forward_propagation(X)
-        predictions = np.array([True if i> 0.5 else False for i in A2[0]]).reshape(1,-1)
+        predictions = np.array([True if i> 0.5 else False for i in A2[0]]) #.reshape(1,-1)
     
         return predictions
 
@@ -200,9 +224,24 @@ class OneHiddenLayerClassification:
         no_structure = np.random.rand(N, 2), np.random.rand(N, 2)
         
         return noisy_circles#, noisy_moons, blobs, gaussian_quantiles, no_structure
+
+    def predict_weight_dimension_reduced(self, X):
+        temp = self.parameters
+        self.parameters["W1"] = self.parameters["W1"][:, 0:2]
+        # self.parameters["W2"] = self.parameters["W2"][:, 0:2]
+        A2, cache = self.forward_propagation(X)
+        predictions = np.array([True if i> 0.5 else False for i in A2[0]]) #.reshape(1,-1)
+
+        self.weights = temp
+        return predictions
+
     @staticmethod
     def plot_decision_boundary(model, X, y):
         # Set min and max values and give it some padding
+        if X.shape[0] != 2:
+            X = X[-6:-8:-1]
+        print('s')
+        print(X.shape, y.shape)
         x_min, x_max = X[0, :].min() - 1, X[0, :].max() + 1
         y_min, y_max = X[1, :].min() - 1, X[1, :].max() + 1
         h = 0.01
@@ -218,23 +257,98 @@ class OneHiddenLayerClassification:
         plt.scatter(X[0, :], X[1, :], c=y, cmap=plt.cm.Spectral)
     
     def visualize_planar_model(self, X, Y):
-        self.plot_decision_boundary(lambda x: self.predict(x.T), X, Y)
+        self.plot_decision_boundary(lambda x: self.predict_weight_dimension_reduced(x.T), X.T, Y.T)
         plt.title("Decision Boundary for the model")
         plt.show()
 
-    def visualize_costs(self):
-        x = [x*1000 for x in range(1,len(self.costs)+1)]
-        plt.plot(x,self.costs)
-        plt.xlabel('Iteration') 
-        plt.ylabel('Loss') 
-        plt.title("Loss graph")
-        plt.show()
+    def plot_costs(self, ax):
+        x = [x*10 for x in range(1,len(self.costs)+1)]
+        ax.plot(x,self.costs)
+        ax.set_xlabel('Iteration') 
+        ax.set_ylabel('Loss') 
+        ax.set_title("Loss graph")
+
+    def calculate_metrics(self, y_actual, y_pred):
+        f1_sc = f1_score(y_actual, y_pred)
+        acc_sc = accuracy_score(y_actual, y_pred)
+        rec_sc = recall_score(y_actual, y_pred)
+        prec_sc = precision_score(y_actual, y_pred)
+        conf = confusion_matrix(y_actual, y_pred)
+        tn, fp, fn, tp = conf.ravel()
+        print(" accuracy:" + str((tn+tp)/(tp+tn+fp+fn)))
+        res = " accuracy score: {}\n recall_score: {}\n precision_score: {}\n f1_score: {}"
+        print(res.format(acc_sc, rec_sc, prec_sc, prec_sc, f1_sc))
+
+        return conf
+
+    def print_metrics(self, X_train, X_test, y_train, y_test):
+        y_pred_train = OHLC.predict(X_train.T)
+        y_pred_test = OHLC.predict(X_test.T)
+        print(y_pred_train.shape, y_pred_test.shape, y_train.shape, y_test.shape)
+        print('----------------------------\nThe training accuracy\n----------------------------')
+        train_conf_mat = OHLC.calculate_metrics(y_train, y_pred_train)
+        print('----------------------------\nThe test accuracy\n--------------------------------')
+        test_conf_mat = OHLC.calculate_metrics(y_test, y_pred_test)
+
+        return (train_conf_mat, test_conf_mat)
+
+    def plot_conf_matrices(self,train_conf_mat, test_conf_mat , ax1, ax2):
+
+        ax1.set_title('Confusion Matrix for training accuracy')
+        sns.heatmap(train_conf_mat,ax=ax1, annot=True, fmt='d')
+
+        ax2.set_title('Confusion Matrix for test accuracy')
+        sns.heatmap(test_conf_mat,ax=ax2, annot=True, fmt='d')
+    
+    @staticmethod
+    def preprocess_balance_dataset_and_save():
+        df = pd.read_csv(parent + '/datasets/fraud_detection/creditcard.csv')
+    
+        rob_scaler = RobustScaler()
+        #---------------------------------
+        df['scaled_amount'] = rob_scaler.fit_transform(df['Amount'].values.reshape(-1,1))
+        df['scaled_time'] = rob_scaler.fit_transform(df['Time'].values.reshape(-1,1))
+        df.drop(['Time','Amount'], axis=1, inplace=True)
+        scaled_amount = df['scaled_amount']
+        scaled_time = df['scaled_time']
+        df.drop(['scaled_amount', 'scaled_time'], axis=1, inplace=True)
+        df.insert(0, 'scaled_amount', scaled_amount)
+        df.insert(1, 'scaled_time', scaled_time)
+        #---------------------------------
+        df = df.sample(frac=1)
+        # amount of fraud classes 492 rows.
+        fraud_df = df.loc[df['Class'] == 1]
+        non_fraud_df = df.loc[df['Class'] == 0][:492]
+        normal_distributed_df = pd.concat([fraud_df, non_fraud_df])
+        # Shuffle dataframe rows
+        new_df = normal_distributed_df.sample(frac=1, random_state=42)
+        new_df.to_csv('mini_ds_creditcard.csv')
+
 
 if __name__ == '__main__':
-    #X, Y = OneHiddenLayerClassification.load_planar_dataset()
-    X, Y = OneHiddenLayerClassification.load_extra_datasets()
-    X, Y = X.T, Y.reshape(1,-1)
-    OHLC = OneHiddenLayerClassification()
-    OHLC.train_nn_model(X, Y, 6, num_iterations=20000, learning_rate=0.4, print_cost=True)
-    OHLC.visualize_planar_model(X,Y)
-    OHLC.visualize_costs()
+    OHLC = OneHiddenLayerCls()
+
+    # Planar dataset
+    X, Y = OneHiddenLayerCls.load_planar_dataset()
+    OHLC.train_nn_model(X, Y, 10, num_iterations=1000, learning_rate=0.3, print_cost=True)
+    OHLC.visualize_planar_model(X.T,Y.T)
+
+    #X, Y = OneHiddenLayerCls.load_extra_datasets()
+    
+    ## Fraud_detection dataset
+    ## OneHiddenLayerCls.preprocess_balance_dataset_and_save() # RUN ONLY ONCE
+    # df = pd.read_csv(parent + '/datasets/fraud_detection/mini_ds_creditcard.csv')
+    # X_train, X_test, y_train, y_test = train_test_split(df.iloc[:,1:-1], df.iloc[:,-1], test_size=0.1, random_state=42)
+    # X , Y = (X_train, y_train)
+    # print(X.columns)
+    # print(X.shape, Y.shape)
+    # OHLC.train_nn_model(X.T, Y.values.reshape((-1,1)).T, 10, num_iterations=3000, learning_rate=0.3, batch_size=100, print_cost=True)
+    # X_np = X.to_numpy()
+    # # OHLC.visualize_planar_model(X_np, Y) # Not sure if it works true for non planar 2D data.
+    
+    # f, (ax1, ax2, ax3) = plt.subplots(1, 3,figsize=(15, 5))
+    # train_conf_mat, test_conf_mat = OHLC.print_metrics(X_train, X_test, y_train, y_test)
+    # OHLC.plot_conf_matrices(train_conf_mat, test_conf_mat, ax1, ax2)
+    # OHLC.plot_costs(ax3)
+    # plt.show()
+   
