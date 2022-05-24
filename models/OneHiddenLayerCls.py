@@ -274,8 +274,6 @@ class OneHiddenLayerCls:
         rec_sc = recall_score(y_actual, y_pred)
         prec_sc = precision_score(y_actual, y_pred)
         conf = confusion_matrix(y_actual, y_pred)
-        tn, fp, fn, tp = conf.ravel()
-        print(" accuracy:" + str((tn+tp)/(tp+tn+fp+fn)))
         res = " accuracy score: {}\n recall_score: {}\n precision_score: {}\n f1_score: {}"
         print(res.format(acc_sc, rec_sc, prec_sc, prec_sc, f1_sc))
 
@@ -292,20 +290,37 @@ class OneHiddenLayerCls:
 
         return (train_conf_mat, test_conf_mat)
 
+    def visualize_conf_mat(self, cf_matrix, ax=None):
+        group_names = ['True Neg','False Pos','False Neg','True Pos']
+        group_counts = ['{0:0.0f}'.format(value) for value in
+                        cf_matrix.flatten()]
+        group_percentages = ['{0:.2%}'.format(value) for value in
+                            cf_matrix.flatten()/np.sum(cf_matrix)]
+        labels = [f'{v1}\n{v2}\n{v3}' for v1, v2, v3 in
+                zip(group_names,group_counts,group_percentages)]
+        labels = np.asarray(labels).reshape(2,2)
+
+        categories = ['Non-fraud', 'Fraud']
+        if ax:
+            sns.heatmap(cf_matrix, annot=labels, ax=ax, fmt='', xticklabels=categories, yticklabels=categories, cmap='Blues')
+        else:
+            sns.heatmap(cf_matrix, annot=labels, fmt='', xticklabels=categories, yticklabels=categories, cmap='Blues')
+
     def plot_conf_matrices(self,train_conf_mat, test_conf_mat , ax1, ax2):
 
         ax1.set_title('Confusion Matrix for training accuracy')
-        sns.heatmap(train_conf_mat,ax=ax1, annot=True, fmt='d')
+        self.visualize_conf_mat(train_conf_mat, ax1)
 
         ax2.set_title('Confusion Matrix for test accuracy')
-        sns.heatmap(test_conf_mat,ax=ax2, annot=True, fmt='d')
+        self.visualize_conf_mat(test_conf_mat, ax2)
     
     @staticmethod
     def preprocess_balance_dataset_and_save():
         df = pd.read_csv(parent + '/datasets/fraud_detection/creditcard.csv')
     
-        rob_scaler = RobustScaler()
+        # Scaling features
         #---------------------------------
+        rob_scaler = RobustScaler()
         df['scaled_amount'] = rob_scaler.fit_transform(df['Amount'].values.reshape(-1,1))
         df['scaled_time'] = rob_scaler.fit_transform(df['Time'].values.reshape(-1,1))
         df.drop(['Time','Amount'], axis=1, inplace=True)
@@ -314,6 +329,8 @@ class OneHiddenLayerCls:
         df.drop(['scaled_amount', 'scaled_time'], axis=1, inplace=True)
         df.insert(0, 'scaled_amount', scaled_amount)
         df.insert(1, 'scaled_time', scaled_time)
+
+        # Undersampling
         #---------------------------------
         df = df.sample(frac=1)
         # amount of fraud classes 492 rows.
@@ -321,34 +338,64 @@ class OneHiddenLayerCls:
         non_fraud_df = df.loc[df['Class'] == 0][:492]
         normal_distributed_df = pd.concat([fraud_df, non_fraud_df])
         # Shuffle dataframe rows
-        new_df = normal_distributed_df.sample(frac=1, random_state=42)
-        new_df.to_csv('mini_ds_creditcard.csv')
+        undersampled_df = normal_distributed_df.sample(frac=1, random_state=42)
+
+         # Removing outliers
+        #---------------------------------
+        # # -----> V14 Removing Outliers (Highest Negative Correlated with Labels)
+        v14_fraud = undersampled_df['V14'].loc[undersampled_df['Class'] == 1].values
+        q25, q75 = np.percentile(v14_fraud, 25), np.percentile(v14_fraud, 75)
+        v14_iqr = q75 - q25
+
+        v14_cut_off = v14_iqr * 1.5
+        v14_lower, v14_upper = q25 - v14_cut_off, q75 + v14_cut_off
+        undersampled_df = undersampled_df.drop(undersampled_df[(undersampled_df['V14'] > v14_upper) | (undersampled_df['V14'] < v14_lower)].index)
+
+        # -----> V12 removing outliers from fraud transactions
+        v12_fraud = undersampled_df['V12'].loc[undersampled_df['Class'] == 1].values
+        q25, q75 = np.percentile(v12_fraud, 25), np.percentile(v12_fraud, 75)
+        v12_iqr = q75 - q25
+
+        v12_cut_off = v12_iqr * 1.5
+        v12_lower, v12_upper = q25 - v12_cut_off, q75 + v12_cut_off
+        undersampled_df = undersampled_df.drop(undersampled_df[(undersampled_df['V12'] > v12_upper) | (undersampled_df['V12'] < v12_lower)].index)
+
+        # -----> V10 removing outliers from fraud transactions
+        v10_fraud = undersampled_df['V10'].loc[undersampled_df['Class'] == 1].values
+        q25, q75 = np.percentile(v10_fraud, 25), np.percentile(v10_fraud, 75)
+        v10_iqr = q75 - q25
+
+        v10_cut_off = v10_iqr * 1.5
+        v10_lower, v10_upper = q25 - v10_cut_off, q75 + v10_cut_off
+        undersampled_df = undersampled_df.drop(undersampled_df[(undersampled_df['V10'] > v10_upper) | (undersampled_df['V10'] < v10_lower)].index)
+
+        undersampled_df.to_csv('mini_ds_creditcard.csv')
 
 
 if __name__ == '__main__':
     OHLC = OneHiddenLayerCls()
 
     # Planar dataset
-    X, Y = OneHiddenLayerCls.load_planar_dataset()
-    OHLC.train_nn_model(X, Y, 10, num_iterations=1000, learning_rate=0.3, print_cost=True)
-    OHLC.visualize_planar_model(X.T,Y.T)
+    # X, Y = OneHiddenLayerCls.load_planar_dataset()
+    # OHLC.train_nn_model(X, Y, 10, num_iterations=1000, learning_rate=0.3, print_cost=True)
+    # OHLC.visualize_planar_model(X.T,Y.T)
 
     #X, Y = OneHiddenLayerCls.load_extra_datasets()
     
-    ## Fraud_detection dataset
-    ## OneHiddenLayerCls.preprocess_balance_dataset_and_save() # RUN ONLY ONCE
-    # df = pd.read_csv(parent + '/datasets/fraud_detection/mini_ds_creditcard.csv')
-    # X_train, X_test, y_train, y_test = train_test_split(df.iloc[:,1:-1], df.iloc[:,-1], test_size=0.1, random_state=42)
-    # X , Y = (X_train, y_train)
-    # print(X.columns)
-    # print(X.shape, Y.shape)
-    # OHLC.train_nn_model(X.T, Y.values.reshape((-1,1)).T, 10, num_iterations=3000, learning_rate=0.3, batch_size=100, print_cost=True)
-    # X_np = X.to_numpy()
-    # # OHLC.visualize_planar_model(X_np, Y) # Not sure if it works true for non planar 2D data.
+    # Fraud_detection dataset
+    OneHiddenLayerCls.preprocess_balance_dataset_and_save() # RUN ONLY ONCE
+    df = pd.read_csv(parent + '/datasets/fraud_detection/mini_ds_creditcard.csv')
+    X_train, X_test, y_train, y_test = train_test_split(df.iloc[:,1:-1], df.iloc[:,-1], test_size=0.1, random_state=42)
+    X , Y = (X_train, y_train)
+    print(X.columns)
+    print(X.shape, Y.shape)
+    OHLC.train_nn_model(X.T, Y.values.reshape((-1,1)).T, 20, num_iterations=3000, learning_rate=0.2, batch_size=100, print_cost=True)
+    X_np = X.to_numpy()
+    # OHLC.visualize_planar_model(X_np, Y) # Not sure if it works true for non planar 2D data.
     
-    # f, (ax1, ax2, ax3) = plt.subplots(1, 3,figsize=(15, 5))
-    # train_conf_mat, test_conf_mat = OHLC.print_metrics(X_train, X_test, y_train, y_test)
-    # OHLC.plot_conf_matrices(train_conf_mat, test_conf_mat, ax1, ax2)
-    # OHLC.plot_costs(ax3)
-    # plt.show()
+    f, (ax1, ax2, ax3) = plt.subplots(1, 3,figsize=(15, 5))
+    train_conf_mat, test_conf_mat = OHLC.print_metrics(X_train, X_test, y_train, y_test)
+    OHLC.plot_conf_matrices(train_conf_mat, test_conf_mat, ax1, ax2)
+    OHLC.plot_costs(ax3)
+    plt.show()
    
