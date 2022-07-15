@@ -11,7 +11,9 @@ def logistic_cost(Y_hat, Y):
     m = Y.shape[1]
     loss = np.dot(Y, np.log(Y_hat).T) + np.dot((1-Y),np.log(1-Y_hat).T)
     cost = np.divide(loss, -m)
+    print(cost)
     cost = float(np.squeeze(cost))
+    
     return cost
 
 def mean_squared_error(Y_hat, Y):

@@ -18,8 +18,8 @@ from sklearn.metrics import confusion_matrix, accuracy_score, recall_score, prec
 import seaborn as sns
 class OneHiddenLayerCls:
 
-    def __init_(self):
-        self.parameters = {}
+    def __init__(self, parameters={}):
+        self.parameters = parameters
         self.costs = []
 
     def initialize_parameters(self, n_x, n_h, n_y):
@@ -383,13 +383,13 @@ if __name__ == '__main__':
     #X, Y = OneHiddenLayerCls.load_extra_datasets()
     
     # Fraud_detection dataset
-    OneHiddenLayerCls.preprocess_balance_dataset_and_save() # RUN ONLY ONCE
+    #OneHiddenLayerCls.preprocess_balance_dataset_and_save() # RUN ONLY ONCE
     df = pd.read_csv(parent + '/datasets/fraud_detection/mini_ds_creditcard.csv')
     X_train, X_test, y_train, y_test = train_test_split(df.iloc[:,1:-1], df.iloc[:,-1], test_size=0.1, random_state=42)
     X , Y = (X_train, y_train)
     print(X.columns)
     print(X.shape, Y.shape)
-    OHLC.train_nn_model(X.T, Y.values.reshape((-1,1)).T, 20, num_iterations=3000, learning_rate=0.2, batch_size=100, print_cost=True)
+    OHLC.train_nn_model(X.T, Y.values.reshape((-1,1)).T, 20, num_iterations=5000, learning_rate=0.3, batch_size=100, print_cost=True)
     X_np = X.to_numpy()
     # OHLC.visualize_planar_model(X_np, Y) # Not sure if it works true for non planar 2D data.
     

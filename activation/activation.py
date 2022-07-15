@@ -10,10 +10,10 @@ def sigmoid_derivative(x):
     return ds
 
 def relu(x):
-    return np.max(0, x)
+    return np.maximum(0, x)
 
 def leaky_relu(x):
-    return np.max(0.01*x,x)
+    return np.maximum(0.01*x,x)
 
 def tanh(x):
     """
